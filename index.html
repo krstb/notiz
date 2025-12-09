@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notizen</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #e0f7fa;
+        }
+
+        /* Keyframes for the success pulse effect */
+        @keyframes pulse-success {
+            0% { box-shadow: 0 0 0 0 rgba(8, 145, 178, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(8, 145, 178, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(8, 145, 178, 0); }
+        }
+
+        .pulse-success {
+            animation: pulse-success 0.6s cubic-bezier(0.4, 0, 0.6, 1);
+        }
+
+        /* Keyframes for the danger pulse effect */
+        @keyframes pulse-danger {
+            0% { border-color: #ef4444; }
+            50% { border-color: #fca5a5; }
+            100% { border-color: #ef4444; }
+        }
+
+        .pulse-danger {
+            animation: pulse-danger 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-blue-50 min-h-screen flex flex-col items-center p-4 md:p-8">
+
+    <div class="w-full max-w-xl bg-white rounded-3xl shadow-xl p-6 md:p-10 mt-10">
+
+        <h1 class="text-4xl md:text-5xl font-extrabold text-center text-slate-900 mb-6">
+            Notizen
+        </h1>
+
+        <form id="noteForm" class="flex flex-col gap-4 mb-8">
+            <div class="flex flex-col md:flex-row gap-4">
+                 <input type="text" id="noteInput" placeholder="Neue Notiz hier eingeben..."
+                       class="flex-1 p-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-cyan-500 transition-all duration-300 text-slate-800 text-lg shadow-sm">
+                 <select id="priorityInput" class="p-3 rounded-xl border-2 border-slate-200 focus:outline-none focus:border-cyan-500 transition-all duration-300 text-slate-800 text-lg shadow-sm bg-white">
+                    <option value="niedrig" selected>Niedrig</option>
+                    <option value="mittel">Mittel</option>
+                    <option value="hoch">Hoch</option>
+                </select>
+            </div>
+            <button type="submit"
+                    class="w-full bg-cyan-600 text-white font-semibold py-3 px-8 rounded-xl shadow-md transition-all duration-300 transform hover:scale-105 active:scale-95 hover:bg-cyan-700
+                           bg-gradient-to-r from-cyan-500 to-cyan-700 hover:from-cyan-600 hover:to-cyan-800">
+                Hinzufügen
+            </button>
+        </form>
+
+        <div id="notesContainer" class="space-y-4">
+            <p id="loadingMessage" class="text-center text-slate-500">Notizen werden geladen...</p>
+        </div>
+
+        <button id="exportCsvBtn" class="w-full bg-slate-200 text-slate-700 font-semibold py-3 px-8 rounded-xl shadow-md transition-all duration-300 transform hover:scale-105 active:scale-95 hover:bg-slate-300 mt-8">
+            Notizen als CSV exportieren
+        </button>
+    </div>
+
+    <script>
+        // DOM Elements
+        const noteForm = document.getElementById('noteForm');
+        const noteInput = document.getElementById('noteInput');
+        const priorityInput = document.getElementById('priorityInput');
+        const notesContainer = document.getElementById('notesContainer');
+        const loadingMessage = document.getElementById('loadingMessage');
+
+        // --- Data Handling with localStorage ---
+
+        const getNotes = () => JSON.parse(localStorage.getItem('notes-app-data')) || [];
+        const saveNotes = (notes) => localStorage.setItem('notes-app-data', JSON.stringify(notes));
+
+        // --- UI Rendering ---
+        const priorityColors = {
+            hoch: 'bg-red-500',
+            mittel: 'bg-yellow-400',
+            niedrig: 'bg-green-500'
+        };
+
+        const renderNotes = () => {
+            const notes = getNotes();
+            notesContainer.innerHTML = ''; // Clear the container
+            if (notes.length === 0) {
+                loadingMessage.textContent = 'Sie haben noch keine Notizen.';
+                notesContainer.appendChild(loadingMessage);
+                return;
+            }
+
+            // Sortieren: 1. Priorität (absteigend), 2. Alphabetisch (aufstehend), 3. Erstellungsdatum (neueste zuerst)
+            const priorityOrder = { hoch: 3, mittel: 2, niedrig: 1 };
+            notes.sort((a, b) => {
+                const priorityA = priorityOrder[a.priority] || 0;
+                const priorityB = priorityOrder[b.priority] || 0;
+                if (priorityB !== priorityA) return priorityB - priorityA;
+
+                const textComparison = a.text.localeCompare(b.text);
+                if (textComparison !== 0) return textComparison;
+                
+                return b.createdAt - a.createdAt;
+            });
+
+            notes.forEach(note => {
+                const noteElement = document.createElement('div');
+                noteElement.className = 'note-item flex items-center justify-between p-4 bg-white rounded-xl shadow-lg border border-slate-200 transition-all duration-300 transform hover:scale-[1.01] hover:shadow-xl';
+                noteElement.dataset.id = note.id;
+                noteElement.innerHTML = createNoteView(note);
+                notesContainer.appendChild(noteElement);
+            });
+        };
+        
+        // Helper to create the standard note view HTML
+        const createNoteView = (note) => `
+            <div class="flex items-center flex-1 min-w-0">
+                 <span class="w-3 h-3 rounded-full mr-4 flex-shrink-0 ${priorityColors[note.priority] || 'bg-gray-300'}"></span>
+                 <p class="text-slate-800 break-words text-lg truncate">${note.text}</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button class="edit-btn text-cyan-500 hover:text-cyan-700 transition-colors duration-200 transform hover:scale-110 active:scale-95" aria-label="Notiz bearbeiten">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L15.232 5.232z" /></svg>
+                </button>
+                <button class="delete-btn text-red-400 hover:text-red-600 transition-colors duration-200 transform hover:scale-110 active:scale-95" aria-label="Notiz löschen">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
+            </div>
+        `;
+
+        // --- Event Listeners ---
+
+        // Add a new note
+        noteForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const noteText = noteInput.value.trim();
+            if (noteText === '') {
+                noteInput.classList.add('border-red-500', 'pulse-danger');
+                setTimeout(() => noteInput.classList.remove('border-red-500', 'pulse-danger'), 1000);
+                return;
+            }
+
+            const notes = getNotes();
+            const newNote = {
+                id: Date.now(),
+                text: noteText,
+                priority: priorityInput.value,
+                createdAt: Date.now()
+            };
+            notes.push(newNote);
+            saveNotes(notes);
+            renderNotes();
+
+            noteInput.value = '';
+            priorityInput.value = 'niedrig';
+            noteInput.focus();
+            noteInput.classList.add('border-cyan-600', 'pulse-success');
+            setTimeout(() => noteInput.classList.remove('border-cyan-600', 'pulse-success'), 500);
+        });
+
+        // Handle clicks on the notes list
+        notesContainer.addEventListener('click', (e) => {
+            const target = e.target.closest('button');
+            if (!target) return;
+
+            const noteElement = target.closest('.note-item');
+            const noteId = parseInt(noteElement.dataset.id);
+            const notes = getNotes();
+            const originalNote = notes.find(n => n.id === noteId);
+
+            // Edit button clicked
+            if (target.classList.contains('edit-btn')) {
+                noteElement.innerHTML = `
+                    <div class="flex flex-col gap-3 flex-1">
+                        <input type="text" value="${originalNote.text}" class="edit-input w-full p-3 rounded-lg border-2 border-cyan-500 focus:outline-none transition-colors duration-300 text-slate-800 text-lg shadow-sm">
+                        <select class="edit-priority-input w-full p-3 rounded-lg border-2 border-cyan-500 focus:outline-none bg-white text-lg">
+                            <option value="niedrig" ${originalNote.priority === 'niedrig' ? 'selected' : ''}>Niedrig</option>
+                            <option value="mittel" ${originalNote.priority === 'mittel' ? 'selected' : ''}>Mittel</option>
+                            <option value="hoch" ${originalNote.priority === 'hoch' ? 'selected' : ''}>Hoch</option>
+                        </select>
+                        <div class="flex items-center gap-2 mt-2">
+                            <button class="save-btn py-1 px-3 rounded-md text-white font-semibold bg-green-500 hover:bg-green-600 transition-colors duration-200 flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Speichern
+                            </button>
+                            <button class="cancel-action-btn py-1 px-3 rounded-md text-slate-700 font-semibold bg-gray-200 hover:bg-gray-300 transition-colors duration-200 flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Abbrechen
+                            </button>
+                        </div>
+                    </div>`;
+                noteElement.querySelector('.edit-input').focus();
+            }
+            
+            // Delete button clicked -> show confirmation
+            else if (target.classList.contains('delete-btn')) {
+                noteElement.innerHTML = `
+                    <div class="flex flex-col gap-3 flex-1">
+                        <p class="text-slate-800 text-lg">Sind Sie sicher?</p>
+                        <div class="flex items-center gap-2">
+                            <button class="confirm-delete-btn py-1 px-3 rounded-md text-white font-semibold bg-red-500 hover:bg-red-600 transition-colors duration-200">Ja, löschen</button>
+                            <button class="cancel-action-btn py-1 px-3 rounded-md text-slate-700 font-semibold bg-gray-200 hover:bg-gray-300 transition-colors duration-200">Abbrechen</button>
+                        </div>
+                    </div>`;
+            }
+
+            // Save button clicked (after edit)
+            else if (target.classList.contains('save-btn')) {
+                const newText = noteElement.querySelector('.edit-input').value.trim();
+                const newPriority = noteElement.querySelector('.edit-priority-input').value;
+                if (newText) {
+                    const updatedNotes = notes.map(note => 
+                        note.id === noteId ? { ...note, text: newText, priority: newPriority } : note
+                    );
+                    saveNotes(updatedNotes);
+                    renderNotes();
+                } else {
+                    renderNotes(); // Revert if new text is empty
+                }
+            }
+
+            // Confirm delete button clicked
+            else if (target.classList.contains('confirm-delete-btn')) {
+                const updatedNotes = notes.filter(note => note.id !== noteId);
+                saveNotes(updatedNotes);
+                renderNotes();
+            }
+            
+            // Cancel button clicked
+            else if (target.classList.contains('cancel-action-btn')) {
+                 renderNotes();
+            }
+        });
+
+        // Initial load
+        window.addEventListener('load', () => {
+            renderNotes();
+            noteInput.focus();
+        });
+        
+        // --- CSV Export Functionality ---
+
+        const exportCsvBtn = document.getElementById('exportCsvBtn');
+
+        const exportNotesAsCsv = () => {
+            const notes = getNotes();
+            if (notes.length === 0) {
+                alert('Es gibt keine Notizen zum Exportieren.');
+                return;
+            }
+
+            // Define the CSV content and use UTF-8 with BOM for correct character display in Excel
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; 
+
+            // CSV Header (column names)
+            const headers = ["ID", "Text", "Priorität", "Erstellungsdatum"];
+            // Hier verwenden wir jetzt das Komma als Trennzeichen
+            csvContent += headers.join(",") + "\n";
+
+            // Add note data to CSV string
+            notes.forEach(note => {
+                const date = new Date(note.createdAt).toLocaleString('de-DE');
+                const escapedText = `"${note.text.replace(/"/g, '""')}"`;
+                // Diese Zeile kombiniert die einzelnen Werte in einer einzigen CSV-Zeile
+                const row = [note.id, escapedText, note.priority, date];
+                // Und hier verwenden wir auch das Komma
+                csvContent += row.join(",") + "\n";
+            });
+
+            // Create a temporary link element and trigger the download
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "notizen-export.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        // Add event listener to the new button
+        exportCsvBtn.addEventListener('click', exportNotesAsCsv);
+    </script>
+</body>
+</html>
