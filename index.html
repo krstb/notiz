@@ -21,7 +21,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        
+
+        textarea { 
+    resize: none !important; 
+}
         html, body { 
             background-color: #e0f7fa !important;
         }
@@ -58,7 +61,7 @@
 <body class="bg-[#e0f7fa] min-h-screen flex flex-col items-center p-2">
 
     <div class="w-full max-w-md bg-white rounded-2xl shadow-lg p-4 md:p-5 mt-0.5">
-        <h1 class="text-lg font-bold text-center text-slate-800 mb-3">Notizen</h1>
+        <h1 class="text-lg font-bold text-center text-slate-800 mb-3">Notizenv Offline</h1>
 
         <div id="appContent">
             <form id="noteForm" class="flex flex-col gap-2 mb-4">
