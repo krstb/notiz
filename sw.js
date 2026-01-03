@@ -1,4 +1,4 @@
-const CACHE_NAME = 'notizen_offline-v9';
+const CACHE_NAME = 'notizen_offline-v10';
 const ASSETS = [
   'index.html',
   'manifest.json',
@@ -25,13 +25,12 @@ self.addEventListener('activate', (event) => {
   return self.clients.claim();
 });
 
-// Die stabilste Strategie gegen den Refresh-Fehler
 self.addEventListener('fetch', (event) => {
+  // Nur für Anfragen auf der eigenen Seite (keine externen APIs außer Tailwind)
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-      // 1. Wenn im Cache, sofort diese Version liefern (kein Warten aufs Netz)
+      // Wenn wir offline sind oder ein Refresh stattfindet: Sofort Cache liefern
       const fetchPromise = fetch(event.request).then((networkResponse) => {
-        // 2. Im Hintergrund neue Version in den Cache legen
         if (networkResponse && networkResponse.status === 200) {
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, networkResponse.clone());
@@ -39,7 +38,7 @@ self.addEventListener('fetch', (event) => {
         }
         return networkResponse;
       }).catch(() => {
-        // Netzwerkfehler ignorieren, da wir ja den Cache haben
+        // Im Offline-Fall: Fehler unterdrücken, wir haben ja den Cache
       });
 
       return cachedResponse || fetchPromise;
